@@ -21,10 +21,10 @@ export default function Home() {
   const getMonthlyEntries = () => {
     return safeEntries.filter(e => {
       try {
-        // Firestore Timestamp: e.createdAt.seconds
-        const entryDate = e.createdAt?.seconds
-          ? new Date(e.createdAt.seconds * 1000)
-          : new Date(e.createdAt);
+        // Firestore Timestamp: e.CREATED_AT.seconds
+        const entryDate = e.CREATED_AT?.seconds
+          ? new Date(e.CREATED_AT.seconds * 1000)
+          : new Date(e.CREATED_AT);
         const now = new Date();
         return entryDate.getMonth() === now.getMonth() &&
                entryDate.getFullYear() === now.getFullYear();
@@ -35,7 +35,7 @@ export default function Home() {
   };
 
   const getUserEntries = () => {
-    return safeEntries.filter(e => e.createdBy === user?.uid).length;
+    return safeEntries.filter(e => e.CREATED_BY === user?.uid).length;
   };
 
   return (
@@ -133,11 +133,11 @@ export default function Home() {
                             <code className="small">{entry.REFERENCE_CODE || entry.referenceCode}</code>
                           </h6>
                           <small>
-                            {entry.createdAt
+                            {entry.CREATED_AT
                               ? (
-                                  entry.createdAt.seconds
-                                    ? new Date(entry.createdAt.seconds * 1000).toLocaleDateString()
-                                    : new Date(entry.createdAt).toLocaleDateString()
+                                  entry.CREATED_AT.seconds
+                                    ? new Date(entry.CREATED_AT.seconds * 1000).toLocaleDateString()
+                                    : new Date(entry.CREATED_AT).toLocaleDateString()
                                 )
                               : 'N/A'}
                           </small>
@@ -147,7 +147,7 @@ export default function Home() {
                           <span className="badge bg-primary me-1">{entry.CLIENT_CODE || entry.clientCode}</span>
                           <span className="badge bg-success">{entry.CAPACITY_MW || entry.capacityMw}MW</span>
                         </p>
-                        <small>Created by: {entry.createdBy}</small>
+                        <small>Created by: {entry.USER_NAME || entry.userName || 'Unknown'}</small>
                       </div>
                     ))}
                   </div>

@@ -246,14 +246,37 @@ export function DataProvider({ children }) {
     console.log('🔧 Generating reference code with data:', entryData, 'Serial:', slNo);
     
     const now = new Date();
-    const year = now.getFullYear().toString().slice(-2);
-    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const currentMonth = now.getMonth() + 1; // 1-12
+    const currentYear = now.getFullYear();
+    
+    // Calculate Financial Year
+    // FY starts from April (month 4) to March (month 3) of next year
+    let fyYear;
+    if (currentMonth >= 4) {
+      // April to December: Use current year as FY start year
+      fyYear = currentYear;
+    } else {
+      // January to March: Use previous year as FY start year
+      fyYear = currentYear - 1;
+    }
+    
+    // Format: YYMM (last 2 digits of FY start year + month)
+    const fyYearShort = fyYear.toString().slice(-2);
+    const month = String(currentMonth).padStart(2, '0');
+    const fyDate = `${fyYearShort}${month}`;
     
     const incrementalCount = String(slNo % 100).padStart(2, '0');
     
-    const refCode = `IPR/${entryData.PARTICULARS}/${entryData.CLIENT_CODE}/${Math.round(entryData.CAPACITY_MW)}MW/${entryData.STATE_NAME}/${entryData.SITE_NAME}/${year}${month}/${incrementalCount}`;
+    const refCode = `IPR/${entryData.PARTICULARS}/${entryData.CLIENT_CODE}/${Math.round(entryData.CAPACITY_MW)}MW/${entryData.STATE_NAME}/${entryData.SITE_NAME}/${fyDate}/${incrementalCount}`;
     
     console.log('✅ Generated reference code:', refCode);
+    console.log('📅 FY calculation:', {
+      currentDate: now.toISOString(),
+      currentMonth,
+      currentYear,
+      fyYear,
+      fyDate
+    });
     return refCode;
   };
 

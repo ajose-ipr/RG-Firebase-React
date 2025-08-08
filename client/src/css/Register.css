@@ -1,0 +1,185 @@
+/* Register.css */
+
+.register-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  padding: 20px;
+}
+
+.register-form {
+  background: white;
+  padding: 2.5rem;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  width: auto; /* Changed from 100% */
+  min-width: 300px; /* Added minimum width */
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.register-form:hover {
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.15);
+}
+
+.register-form::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 4px;
+  background: linear-gradient(90deg, #4a90e2 0%, #6a5acd 100%);
+}
+
+.register-title {
+  color: #2c3e50;
+  text-align: center;
+  margin-bottom: 1.5rem; /* Reduced from 2rem */
+  font-size: 1.8rem; /* Slightly smaller */
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.form-group {
+  margin-bottom: 1.25rem; /* Reduced from 1.5rem */
+  position: relative;
+  min-width: 250px; /* Ensure inputs don't get too narrow */
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: #5a6a7e;
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 1px solid #e0e4e8;
+  border-radius: 6px;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+  background-color: #f8fafc;
+  box-sizing: border-box; /* Add this line */
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #6a5acd;
+  box-shadow: 0 0 0 3px rgba(106, 90, 205, 0.2);
+  background-color: white;
+}
+
+.error-message {
+  color: #e74c3c;
+  background-color: #fde8e8;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  margin-bottom: 1.25rem; /* Reduced from 1.5rem */
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+.register-button {
+  width: 100%;
+  padding: 0.75rem;
+  background: linear-gradient(90deg, #4a90e2 0%, #6a5acd 100%);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-top: 0.5rem;
+}
+
+.register-button:hover {
+  background: linear-gradient(90deg, #3a7bc8 0%, #5a4acd 100%);
+  transform: translateY(-2px);
+}
+
+.register-button:active {
+  transform: translateY(0);
+}
+
+.login-link {
+  text-align: center;
+  margin-top: 1.25rem; /* Reduced from 1.5rem */
+  color: #5a6a7e;
+  font-size: 0.9rem;
+}
+
+.login-link a {
+  color: #4a90e2;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.login-link a:hover {
+  text-decoration: underline;
+}
+
+/* Password strength indicator */
+.password-strength {
+  margin-top: 0.5rem;
+  height: 4px;
+  background-color: #e0e4e8;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.password-strength-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #ff5e5e, #f9d423, #4cd964);
+  transition: width 0.3s ease;
+}
+
+.password-match {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  padding: 0.25rem 0;
+  border-radius: 4px;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+
+.password-match.match {
+  color: #4caf50;
+  background-color: #e8f5e9;
+}
+
+.password-match.no-match {
+  color: #f44336;
+  background-color: #ffebee;
+}
+
+.register-button:disabled {
+  background: #cccccc;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+/* Responsive adjustments */
+@media (max-width: 480px) {
+  .register-form {
+    padding: 1.5rem;
+    min-width: 280px; /* Slightly smaller minimum on mobile */
+  }
+  
+  .register-title {
+    font-size: 1.5rem;
+    white-space: normal; /* Allow title to wrap on mobile */
+  }
+  
+  .form-group {
+    min-width: auto; /* Allow full width on mobile */
+  }
+}

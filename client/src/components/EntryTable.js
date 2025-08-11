@@ -306,7 +306,7 @@ export default function EntryTable({ onEdit }) {
                   return (
                     <tr 
                       key={entry._id || entry.id} 
-                      className={entry.CREATED_BY === user?.uid ? 'table-info' : ''}
+                      className={index === 0 ? 'table-info' : ''}
                     >
                       <td>{entry.SL_NO}</td>
                       <td>{entry.USER_NAME}</td>

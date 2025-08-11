@@ -12,7 +12,8 @@ import {
   where,
   onSnapshot,
   getDocs,
-  setDoc
+  setDoc,
+  getDoc
 } from 'firebase/firestore';
 
 const DataContext = createContext();
@@ -63,61 +64,59 @@ export function DataProvider({ children }) {
   // Initialize default data when user logs in
   useEffect(() => {
     if (user) {
-      console.log('🔥 USER LOGGED IN - Initializing data for user:', user.email, 'Role:', user.role);
       initializeDefaultData();
-    } else {
-      console.log('🚫 NO USER - Clearing data');
     }
   }, [user]);
 
   // Initialize default dropdown options if they don't exist
   const initializeDefaultData = async () => {
     try {
-      console.log('🔍 Checking for existing dropdown options...');
-      
       // Check if any dropdown options exist
       const snapshot = await getDocs(query(collection(db, 'dropdown_options'), limit(1)));
       
       if (snapshot.empty) {
-        console.log('📝 No dropdown options found. Initializing default data...');
-        
         // Add all default options
         for (const option of DEFAULT_DROPDOWN_OPTIONS) {
           try {
-            const docRef = await addDoc(collection(db, 'dropdown_options'), {
+            await addDoc(collection(db, 'dropdown_options'), {
               ...option,
               createdAt: new Date(),
               createdBy: 'system'
             });
-            console.log(`✅ Added default option: ${option.type} - ${option.value} (ID: ${docRef.id})`);
           } catch (error) {
-            console.error('❌ Error adding default option:', option, error);
+            console.error('Error adding default option:', error);
           }
         }
-        
-        console.log('🎉 Default dropdown options initialized successfully');
-      } else {
-        console.log('✅ Dropdown options already exist, count:', snapshot.size);
       }
 
-      // Initialize counters collection if it doesn't exist
+      // Initialize global counter for cumulative count
+      try {
+        const globalCounterRef = doc(db, 'counters', 'entries');
+        const globalCounterSnap = await getDoc(globalCounterRef);
+        
+        if (!globalCounterSnap.exists()) {
+          await setDoc(globalCounterRef, { count: 0 });
+        }
+      } catch (error) {
+        console.error('Error initializing global counter:', error);
+      }
+
+      // Initialize legacy entries counter (for compatibility)
       try {
         const countersRef = doc(db, 'counters', 'entries');
         await setDoc(countersRef, { count: 0 }, { merge: true });
-        console.log('✅ Counters collection initialized');
       } catch (error) {
-        console.error('❌ Error initializing counters:', error);
+        console.error('Error initializing legacy counters:', error);
       }
 
     } catch (error) {
-      console.error('💥 Error initializing default data:', error);
+      console.error('Error initializing default data:', error);
     }
   };
 
   // Real-time listener for entries
   useEffect(() => {
     if (!user) {
-      console.log('🚫 No user - clearing entries and dropdown options');
       setEntries([]);
       setDropdownOptions({
         PARTICULARS: [],
@@ -129,11 +128,9 @@ export function DataProvider({ children }) {
       return;
     }
 
-    console.log('👂 Setting up real-time listeners for user:', user.email);
     setLoading(true);
 
     // Listen to entries collection in real-time
-    // Note: Do not filter by isActive at query level to include legacy docs without this field
     const entriesQuery = query(
       collection(db, 'entries'),
       orderBy('SL_NO', 'desc'),
@@ -144,16 +141,10 @@ export function DataProvider({ children }) {
       const data = snapshot.docs
         .map(doc => ({ 
           id: doc.id, 
-          _id: doc.id, // Add _id for compatibility
+          _id: doc.id,
           ...doc.data() 
         }))
-        // Exclude only entries explicitly soft-deleted
         .filter(entry => entry.isActive !== false);
-      
-      console.log('📊 Entries snapshot received - count:', data.length);
-      if (data.length > 0) {
-        console.log('📄 Sample entry:', data[0]);
-      }
       
       setEntries(data);
       setPagination({
@@ -163,7 +154,7 @@ export function DataProvider({ children }) {
       });
       setLoading(false);
     }, (error) => {
-      console.error('💥 Error fetching entries:', error);
+      console.error('Error fetching entries:', error);
       setEntries([]);
       setLoading(false);
     });
@@ -179,28 +170,22 @@ export function DataProvider({ children }) {
     };
 
     types.forEach(type => {
-      // Do not filter by isActive at query level to include legacy docs without this field
       const q = query(
         collection(db, 'dropdown_options'),
         where('type', '==', type)
       );
       
       const unsub = onSnapshot(q, (snapshot) => {
-        console.log(`📝 ${type} dropdown snapshot received - count:`, snapshot.size);
-        
-        // Get Firestore options and format them properly
         const firestoreOptions = snapshot.docs
           .map(doc => ({
             id: doc.id,
-            _id: doc.id, // Add _id for compatibility
+            _id: doc.id,
             value: doc.data().value,
             displayName: doc.data().displayName || doc.data().value,
             ...doc.data()
           }))
-          // Exclude only options explicitly marked inactive
           .filter(opt => opt.isActive !== false);
         
-        // Merge with defaults, avoiding duplicates
         const defaultsForType = DEFAULT_DROPDOWN_OPTIONS.filter(opt => opt.type === type);
         const merged = [
           ...defaultsForType,
@@ -210,96 +195,128 @@ export function DataProvider({ children }) {
         ];
         
         options[type] = merged;
-        console.log(`✅ ${type} options loaded:`, options[type].map(opt => opt.value));
         setDropdownOptions({ ...options });
       }, (error) => {
-        console.error(`💥 Error fetching ${type} options:`, error);
+        console.error(`Error fetching ${type} options:`, error);
       });
       
       unsubDropdowns.push(unsub);
     });
 
     return () => {
-      console.log('🔌 Cleaning up real-time listeners');
       unsubscribeEntries();
       unsubDropdowns.forEach(unsub => unsub());
     };
   }, [user]);
 
-  // Get next serial number
-  const getNextSerialNumber = async () => {
+  // Get cumulative count (total entries across all financial years)
+  const getCumulativeCount = async () => {
     try {
-      console.log('🔢 Getting next serial number...');
-      // Simple approach: count existing entries + 1
-      const entriesSnapshot = await getDocs(collection(db, 'entries'));
-      const nextSerial = entriesSnapshot.size + 1;
-      console.log('✅ Next serial number:', nextSerial, '(Total entries:', entriesSnapshot.size, ')');
-      return nextSerial;
+      const globalCounterRef = doc(db, 'counters', 'entries');
+      const snapshot = await getDoc(globalCounterRef);
+
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        const currentCount = data.count || 0;
+        const nextCount = currentCount + 1;
+        await updateDoc(globalCounterRef, { count: nextCount });
+        return nextCount;
+      } else {
+        await setDoc(globalCounterRef, { count: 1 });
+        return 1;
+      }
     } catch (error) {
-      console.error('💥 Error getting serial number:', error);
+      console.error('Error getting cumulative count:', error);
+      // Fallback: count total entries
+      const totalEntries = await getDocs(collection(db, 'entries'));
+      return totalEntries.size + 1;
+    }
+  };
+
+  // Get incremental count for current financial year
+  const getIncrementalCountForCurrentFY = async () => {
+    try {
+      const now = new Date();
+      const currentMonth = now.getMonth() + 1; // 1-12
+      const currentYear = now.getFullYear();
+      
+      // Calculate Financial Year (April to March cycle)
+      const financialYear = currentMonth >= 4 ? (currentYear + 1) % 100 : currentYear % 100;
+      
+      const fyDocId = `fy_${financialYear}`;
+      const fyCounterRef = doc(db, 'counters', fyDocId);
+      const snapshot = await getDoc(fyCounterRef);
+
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        const currentCount = data.incremental_count || 0;
+        const nextCount = currentCount + 1;
+        await updateDoc(fyCounterRef, { incremental_count: nextCount });
+        return nextCount;
+      } else {
+        const newFYData = {
+          financial_year: financialYear,
+          incremental_count: 1,
+          created_at: new Date()
+        };
+        await setDoc(fyCounterRef, newFYData);
+        return 1;
+      }
+    } catch (error) {
+      console.error('Error getting incremental count for FY:', error);
       return 1;
     }
   };
 
-  // Generate reference code (matching Android logic)
-  const generateReferenceCode = (entryData, slNo) => {
-    console.log('🔧 Generating reference code with data:', entryData, 'Serial:', slNo);
-    
+  // Get next serial number (for backward compatibility)
+  const getNextSerialNumber = async () => {
+    try {
+      return await getCumulativeCount();
+    } catch (error) {
+      console.error('Error getting serial number:', error);
+      return 1;
+    }
+  };
+
+  // Generate reference code (matching Android logic exactly)
+  const generateReferenceCode = async (entryData, cumulativeCount) => {
     const now = new Date();
     const currentMonth = now.getMonth() + 1; // 1-12
     const currentYear = now.getFullYear();
     
-    // Calculate Financial Year
-    // FY starts from April (month 4) to March (month 3) of next year
-    let fyYear;
-    if (currentMonth >= 4) {
-      // April to December: Use current year as FY start year
-      fyYear = currentYear;
-    } else {
-      // January to March: Use previous year as FY start year
-      fyYear = currentYear - 1;
-    }
+    // Calculate Financial Year (April to March cycle - same as Android)
+    const financialYear = currentMonth >= 4 ? (currentYear + 1) % 100 : currentYear % 100;
     
-    // Format: YYMM (last 2 digits of FY start year + month)
-    const fyYearShort = fyYear.toString().slice(-2);
-    const month = String(currentMonth).padStart(2, '0');
-    const fyDate = `${fyYearShort}${month}`;
+    // Get incremental count for current FY
+    const incrementalCount = await getIncrementalCountForCurrentFY();
     
-    const incrementalCount = String(slNo % 100).padStart(2, '0');
+    // Format: FY + cumulative count (e.g., 26321 = FY26 + 321 total entries)
+    const fyFormatted = financialYear.toString().padStart(2, '0');
+    const cumulativeFormatted = cumulativeCount.toString().padStart(3, '0');
+    const fyWithCumulative = fyFormatted + cumulativeFormatted;
     
-    const refCode = `IPR/${entryData.PARTICULARS}/${entryData.CLIENT_CODE}/${Math.round(entryData.CAPACITY_MW)}MW/${entryData.STATE_NAME}/${entryData.SITE_NAME}/${fyDate}/${incrementalCount}`;
+    // Format incremental count (e.g., 05 = 5th entry in current FY)
+    const incrementalFormatted = incrementalCount.toString().padStart(2, '0');
     
-    console.log('✅ Generated reference code:', refCode);
-    console.log('📅 FY calculation:', {
-      currentDate: now.toISOString(),
-      currentMonth,
-      currentYear,
-      fyYear,
-      fyDate
-    });
+    const refCode = `IPR/${entryData.PARTICULARS}/${entryData.CLIENT_CODE}/${Math.round(entryData.CAPACITY_MW)}MW/${entryData.STATE_NAME}/${entryData.SITE_NAME}/${fyWithCumulative}/${incrementalFormatted}`;
+    
+    console.log('Reference code generated:', refCode, `(FY: ${financialYear}, Cumulative: ${cumulativeCount}, Incremental: ${incrementalCount})`);
+    
     return refCode;
   };
 
   // Create a new entry in Firestore
   const createEntry = async (entryData) => {
-    console.log('🚀 Starting createEntry process...');
-    console.log('👤 Current user:', user ? { email: user.email, uid: user.uid, role: user.role } : 'NULL');
-    console.log('📝 Entry data received:', entryData);
-    
     if (!user) {
-      console.error('❌ User not authenticated');
       throw new Error('User not authenticated');
     }
     
     try {
-      console.log('🔢 Getting next serial number...');
-      const nextSlNo = await getNextSerialNumber();
-      
-      console.log('🔧 Generating reference code...');
-      const referenceCode = generateReferenceCode(entryData, nextSlNo);
+      const cumulativeCount = await getCumulativeCount();
+      const referenceCode = await generateReferenceCode(entryData, cumulativeCount);
       
       const entryToCreate = {
-        SL_NO: nextSlNo,
+        SL_NO: cumulativeCount,
         USER_NAME: user.username || user.email.split('@')[0],
         PARTICULARS: entryData.PARTICULARS,
         CLIENT_CODE: entryData.CLIENT_CODE,
@@ -314,51 +331,28 @@ export function DataProvider({ children }) {
         isActive: true
       };
 
-      console.log('💾 Creating entry in Firestore:', entryToCreate);
-      
       const docRef = await addDoc(collection(db, 'entries'), entryToCreate);
-      console.log('✅ Entry created successfully with ID:', docRef.id);
-      
-      // Update with document ID
       await updateDoc(docRef, { id: docRef.id });
-      console.log('✅ Entry updated with document ID');
       
-      console.log('🎉 Entry creation completed successfully!');
+      console.log('Entry created successfully:', referenceCode);
     } catch (error) {
-      console.error('💥 Error creating entry:', error);
-      console.error('Error details:', {
-        code: error.code,
-        message: error.message,
-        stack: error.stack
-      });
+      console.error('Error creating entry:', error);
       throw error;
     }
   };
 
   // Update an entry in Firestore
   const updateEntry = async (id, entryData) => {
-    console.log('🔄 Starting updateEntry process...');
-    console.log('🆔 Entry ID:', id);
-    console.log('📝 Update data:', entryData);
-    console.log('👤 Current user:', user ? { email: user.email, uid: user.uid, role: user.role } : 'NULL');
-    
     if (!user) {
-      console.error('❌ User not authenticated');
       throw new Error('User not authenticated');
     }
     
-    // Check if user is admin
     const isAdmin = user.email === 'alphonsajose145@gmail.com';
-    console.log('🔐 Admin check - Is admin:', isAdmin, 'Email:', user.email);
-    
     if (!isAdmin) {
-      console.error('❌ Only admins can edit entries');
       throw new Error('Only admins can edit entries');
     }
     
     try {
-      console.log('💾 Updating entry in Firestore...');
-      
       const entryRef = doc(db, 'entries', id);
       await updateDoc(entryRef, {
         PARTICULARS: entryData.PARTICULARS,
@@ -369,59 +363,39 @@ export function DataProvider({ children }) {
         MODIFIED_BY: user.uid,
         MODIFIED_AT: new Date()
       });
-      
-      console.log('✅ Entry updated successfully');
     } catch (error) {
-      console.error('💥 Error updating entry:', error);
+      console.error('Error updating entry:', error);
       throw error;
     }
   };
 
   // Delete an entry in Firestore (soft delete)
   const deleteEntry = async (id) => {
-    console.log('🗑️ Starting deleteEntry process...');
-    console.log('🆔 Entry ID:', id);
-    console.log('👤 Current user:', user ? { email: user.email, uid: user.uid, role: user.role } : 'NULL');
-    
     if (!user) {
-      console.error('❌ User not authenticated');
       throw new Error('User not authenticated');
     }
     
-    // Check if user is admin
     const isAdmin = user.email === 'alphonsajose145@gmail.com';
-    console.log('🔐 Admin check - Is admin:', isAdmin, 'Email:', user.email);
-    
     if (!isAdmin) {
-      console.error('❌ Only admins can delete entries');
       throw new Error('Only admins can delete entries');
     }
     
     try {
-      console.log('💾 Soft deleting entry in Firestore...');
-      
       const entryRef = doc(db, 'entries', id);
       await updateDoc(entryRef, { 
         isActive: false,
         MODIFIED_BY: user.uid,
         MODIFIED_AT: new Date()
       });
-      
-      console.log('✅ Entry deleted successfully');
     } catch (error) {
-      console.error('💥 Error deleting entry:', error);
+      console.error('Error deleting entry:', error);
       throw error;
     }
   };
 
   // Add a custom dropdown option in Firestore
   const addCustomOption = async (type, value) => {
-    console.log('➕ Adding custom option...');
-    console.log('📝 Type:', type, 'Value:', value);
-    console.log('👤 Current user:', user ? { email: user.email, uid: user.uid } : 'NULL');
-    
     if (!user) {
-      console.error('❌ User not authenticated');
       throw new Error('User not authenticated');
     }
     
@@ -436,24 +410,20 @@ export function DataProvider({ children }) {
         createdBy: user.uid
       };
       
-      console.log('💾 Adding option to Firestore:', optionData);
-      
-      const docRef = await addDoc(collection(db, 'dropdown_options'), optionData);
-      
-      console.log(`✅ Added custom ${type} option: ${value} (ID: ${docRef.id})`);
+      await addDoc(collection(db, 'dropdown_options'), optionData);
     } catch (error) {
-      console.error('💥 Error adding custom option:', error);
+      console.error('Error adding custom option:', error);
       throw error;
     }
   };
 
   // Manual fetch methods (keeping for compatibility)
   const fetchEntries = async (page = 1, search = '', sortBy = 'SL_NO', sortOrder = 'desc') => {
-    console.log('📞 fetchEntries called - using real-time data');
+    // Using real-time data
   };
 
   const fetchDropdownOptions = async () => {
-    console.log('📞 fetchDropdownOptions called - using real-time data');
+    // Using real-time data
   };
 
   const exportData = async () => {
@@ -463,20 +433,6 @@ export function DataProvider({ children }) {
   const getStats = async () => {
     throw new Error('Stats not supported on client. Please implement on backend or use Firestore export tools.');
   };
-
-  // Log current state for debugging
-  useEffect(() => {
-    console.log('📊 DataContext State Update:');
-    console.log('- Entries count:', entries.length);
-    console.log('- Dropdown options loaded:', {
-      PARTICULARS: dropdownOptions.PARTICULARS?.length || 0,
-      CLIENT_CODE: dropdownOptions.CLIENT_CODE?.length || 0,
-      SITE_NAME: dropdownOptions.SITE_NAME?.length || 0,
-      STATE_NAME: dropdownOptions.STATE_NAME?.length || 0
-    });
-    console.log('- Loading:', loading);
-    console.log('- User:', user ? user.email : 'None');
-  }, [entries, dropdownOptions, loading, user]);
 
   const value = {
     entries,
@@ -506,4 +462,31 @@ export function useData() {
     throw new Error('useData must be used within a DataProvider');
   }
   return context;
+}
+
+// Get cumulative count (all entries)
+export async function getCumulativeCount() {
+  const snapshot = await getDocs(collection(db, 'entries'));
+  return snapshot.size;
+}
+
+// Get incremental count for current FY
+export async function getIncrementalCountForFY() {
+  const now = new Date();
+  const year = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1; // FY starts in April
+  const fyStart = new Date(year, 3, 1, 0, 0, 0, 0); // April 1st
+
+  const q = query(
+    collection(db, 'entries'),
+    where('CREATED_AT', '>=', fyStart)
+  );
+  const snapshot = await getDocs(q);
+  return snapshot.size;
+}
+
+// Get current FY as two digits (e.g., 2026 => "26")
+export function getCurrentFYShort() {
+  const now = new Date();
+  const year = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+  return String(year).slice(-2);
 }

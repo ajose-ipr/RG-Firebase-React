@@ -1,7 +1,10 @@
-// Financial Year Helper
+// Financial Year Helper - FIXED TO MATCH ANDROID
 function getFinancialYear(date = new Date()) {
   const year = date.getFullYear();
-  return date.getMonth() < 3 ? year : year + 1;
+  const month = date.getMonth() + 1; // Convert to 1-based month
+  
+  // April to March cycle (same as Android)
+  return month >= 4 ? year + 1 : year;
 }
 
 // Get financial year date range
@@ -66,19 +69,26 @@ function validateEntryData(data) {
   };
 }
 
-// Generate reference code (for Firestore)
-function generateReferenceCode(entryData) {
+// Generate reference code - FIXED TO MATCH ANDROID LOGIC
+function generateReferenceCode(entryData, cumulativeCount, incrementalCount) {
   const {
     particulars,
     clientCode,
     capacityMw,
     siteName,
-    stateName,
-    cumulativeNumber,
-    incrementalNumber
+    stateName
   } = entryData;
   
-  return `IPR/${(particulars || '').toUpperCase()}/${(clientCode || '').toUpperCase().slice(0, 3)}/${capacityMw}MW/${(stateName || '').toUpperCase()}/${(siteName || '').toUpperCase()}/${cumulativeNumber}/${String(incrementalNumber).padStart(2, '0')}`;
+  // Get current financial year (2-digit format like Android)
+  const currentFY = getFinancialYear() % 100;
+  
+  // Format: FY + cumulative count (e.g., 26321 = FY26 + 321 total entries)
+  const fyWithCumulative = `${currentFY.toString().padStart(2, '0')}${cumulativeCount.toString().padStart(3, '0')}`;
+  
+  // Format incremental count (e.g., 05 = 5th entry in current FY)
+  const incrementalFormatted = incrementalCount.toString().padStart(2, '0');
+  
+  return `IPR/${(particulars || '').toUpperCase()}/${(clientCode || '').toUpperCase().slice(0, 4)}/${capacityMw}MW/${(stateName || '').toUpperCase()}/${(siteName || '').toUpperCase()}/${fyWithCumulative}/${incrementalFormatted}`;
 }
 
 // Sanitize input data
